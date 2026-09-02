@@ -1,8 +1,8 @@
 name: uptime
 
 # Внешний сторож лендинга GDPR. Живет у GitHub, а не на нашем железе:
-# если ляжет VPS целиком, сторож на том же VPS промолчал бы.
-# Хостинг serflow для этого не годится - его планировщик не выполняет задачи с 03.06.2026 (проверено).
+# сторож на том же сервере молчит, когда сервер лежит. Хостинг serflow не годится -
+# его планировщик не выполняет задачи с 03.06.2026 (проверено 03.09.2026).
 
 on:
   schedule:
@@ -20,38 +20,31 @@ jobs:
         run: |
           set -u
           FAILS=""
-
-          # Две попытки с паузой: разовый сетевой сбой не повод будить людей
           check() {
             name="$1"; url="$2"; want="$3"; needle="${4:-}"
             for attempt in 1 2; do
-              body=$(curl -s -m 20 -w '\n%{http_code}' "$url" || echo -e "\n000")
-              code=$(printf '%s' "$body" | tail -1)
-              text=$(printf '%s' "$body" | sed '$d')
+              body=$(curl -s -m 20 -w '|%{http_code}' "$url" || printf '|000')
+              code="${body##*|}"
+              text="${body%|*}"
               ok=1
               [ "$code" = "$want" ] || ok=0
-              if [ -n "$needle" ] && ! printf '%s' "$text" | grep -q "$needle"; then ok=0; fi
+              if [ -n "$needle" ]; then
+                case "$text" in *"$needle"*) : ;; *) ok=0 ;; esac
+              fi
               if [ "$ok" = "1" ]; then echo "$name OK ($code)"; return 0; fi
-              [ "$attempt" = "1" ] && sleep 20
+              if [ "$attempt" = "1" ]; then sleep 20; fi
             done
             echo "$name УПАЛ (код $code)"
-            FAILS="${FAILS}
-- $name: код $code вместо $want"
-            return 1
+            FAILS="$FAILS%0A- $name: код $code вместо $want"
+            return 0
           }
-
-          check "лендинг RO" "https://gdpr.ai-platform.space/?lang=ro" 200 "Solicita" || true
-          check "прием заявок" "https://gdpr.ai-platform.space/api/submit.php" 405 || true
-          check "кабинет CRM" "https://meta-ads.ai-platform.space/api/health.php" 200 "HEALTHY" || true
-
+          check "лендинг RO" "https://gdpr.ai-platform.space/?lang=ro" 200 "Solicita"
+          check "прием заявок" "https://gdpr.ai-platform.space/api/submit.php" 405 ""
+          check "кабинет CRM" "https://meta-ads.ai-platform.space/api/health.php" 200 "HEALTHY"
           if [ -n "$FAILS" ]; then
-            MSG="🔴 <b>GDPR: сайт недоступен</b>${FAILS}
-
-Проверено дважды с паузой 20 секунд, внешним сторожем GitHub.
-@tsemakh"
+            MSG="🔴 <b>GDPR: сайт недоступен</b>${FAILS}%0A%0AПроверено дважды с паузой 20 секунд, внешним сторожем GitHub.%0A@tsemakh"
             for chat in $(echo "$TG_CHATS" | tr ',' ' '); do
-              curl -s -m 20 -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
-                -d "chat_id=${chat}" -d "parse_mode=HTML" --data-urlencode "text=${MSG}" > /dev/null
+              curl -s -m 20 "https://api.telegram.org/bot${TG_TOKEN}/sendMessage?chat_id=${chat}&parse_mode=HTML&text=${MSG}" > /dev/null
             done
             echo "алерт отправлен"
             exit 1
