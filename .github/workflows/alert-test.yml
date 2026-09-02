@@ -1,0 +1,23 @@
+name: alert-test
+
+# Разовая проверка самого сторожа: доходит ли алерт при падении.
+# Шлет ТОЛЬКО в технический чат, боевые адресаты не трогаются. Удаляется после проверки.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Заведомо мертвый адрес
+        shell: bash {0}
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+        run: |
+          set -u
+          code=$(curl -s -m 15 -o /dev/null -w '%{http_code}' "https://gdpr.ai-platform.space/zavedomo-net-takoy-stranicy-proverka-storozha" || echo 000)
+          echo "получен код $code"
+          MSG="🧪 Проверка сторожа. Это учебная тревога, сайт в порядке. Проверяю доставку при падении: код $code вместо 200."
+          curl -s -m 20 "https://api.telegram.org/bot${TG_TOKEN}/sendMessage?chat_id=-4937655714&text=${MSG}"
+          echo
