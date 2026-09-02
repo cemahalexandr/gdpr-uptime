@@ -17,6 +17,7 @@ jobs:
         env:
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHATS: ${{ secrets.TG_CHATS }}
+        shell: bash {0}
         run: |
           set -u
           FAILS=""
@@ -38,7 +39,7 @@ jobs:
             FAILS="$FAILS%0A- $name: код $code вместо $want"
             return 0
           }
-          check "лендинг RO" "https://gdpr.ai-platform.space/?lang=ro" 200 "Solicita"
+          check "лендинг RO" "https://gdpr.ai-platform.space/?lang=ro" 200 "lead-form"
           check "прием заявок" "https://gdpr.ai-platform.space/api/submit.php" 405 ""
           check "кабинет CRM" "https://meta-ads.ai-platform.space/api/health.php" 200 "HEALTHY"
           if [ -n "$FAILS" ]; then
